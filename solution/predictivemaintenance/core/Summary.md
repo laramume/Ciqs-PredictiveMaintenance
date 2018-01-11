@@ -1,1 +1,1 @@
-A basic solution with a custom funcction1.
+A basic solution with a custom funcction.
