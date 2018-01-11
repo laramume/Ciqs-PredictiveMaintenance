@@ -1,0 +1,9 @@
+{
+  "frameworks": {
+    "net46":{
+      "dependencies": {
+        "Microsoft.Azure.Management.DataFactories": "4.5.0"
+      }
+    }
+  }
+}

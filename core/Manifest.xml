@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Template id="predictivemaintenance">
+  <Title>Predictive Maintenance</Title>
+  <Owners>
+    <Owner displayname="Daniel Grecoe" email="grecoe@microsoft.com" />
+  </Owners>
+  <PublishedOn>04/12/2016</PublishedOn>
+  <ImageUrl>{PatternAssetBaseUrl}/predictivemaintenance.png</ImageUrl>
+  <Description>This Predictive Maintenance solution monitors aircraft and predicts the remaining useful life of aircraft engine components.</Description>
+  <Summary src="markdown/summary.md" format="markdown"/>
+  <Prerequisites src="markdown/prereqs.md" format="markdown"/>
+  <TryItNow landscapeDashboardPath="{PatternAssetBaseUrl}/dashboards/TryItNow/AirlinePredictiveMaintenance20161222-latest.pbix"
+            portraitDashboardPath="{PatternAssetBaseUrl}/dashboards/TryItNow/AirlinePredictiveMaintenance20161222-latest.pbix"/>
+  <EstimatedTime>20 Minutes</EstimatedTime>
+  <EstimatedCost daily="$9.35" url="https://azure.github.io/Azure-CortanaIntelligence-SolutionAuthoringWorkspace/solution-prices#predictive-maintenance" />
+  <Ingredients>
+    <Ingredient>Web</Ingredient>
+    <Ingredient>EventHub</Ingredient>
+    <Ingredient>StreamAnalytics</Ingredient>
+    <Ingredient>Sql</Ingredient>
+    <Ingredient>StorageAccount</Ingredient>
+    <Ingredient>MachineLearning</Ingredient>
+    <Ingredient>HDInsight</Ingredient>
+    <Ingredient>DataFactory</Ingredient>
+    <Ingredient>PowerBi</Ingredient>
+  </Ingredients>
+  <ProvisioningSteps>
+    <Manual title="Setup SQL server account">
+      <Parameters>
+        <Credential type="sql" username="sqlServerUserName" password="sqlServerPassword" />
+        <Parameter name="containerNameVar" hidden="true" defaultValue="maintenancesadata" />
+      </Parameters>
+    </Manual>
+    <ArmDeployment source="arm/1-eventHubAndSqlDatabase.json" title="Creating EventHub and other Pattern Resources" autoResolveParameters="true" />
+    <AzureFunctionApp alwaysOn="true">
+      <AppSettings>
+        <Add key="AzureWebJobsStorage" value="DefaultEndpointsProtocol=https;AccountName={Outputs.storageAccountName};AccountKey={Outputs.storageAccountKey}" />
+        <Add key="AzureWebJobsDashboard" value="DefaultEndpointsProtocol=https;AccountName={Outputs.storageAccountName};AccountKey={Outputs.storageAccountKey}" />
+      </AppSettings>
+    </AzureFunctionApp>
+    <Function name="populateStorageContainer" title="Uploading hive scripts">
+      <Parameters>
+          <Parameter name="storageAccountName" hidden="true" defaultValue="{Outputs.storageAccountName}" />
+          <Parameter name="storageAccountKey" hidden="true" defaultValue="{Outputs.storageAccountKey}" />
+          <Parameter name="containerName" hidden="true" defaultValue="maintenancesascript" />
+          <Parameter name="assets" hidden="true">
+              <DefaultValue>
+                  {PatternAssetBaseUrl}\hive\AggregateFlightInfo.hql;
+                  {PatternAssetBaseUrl}\hive\PrepareMLInput.hql                                            
+              </DefaultValue>
+          </Parameter>                             
+      </Parameters>
+    </Function>
+    <Function name="populateStorageContainer" title="Uploading solution data">
+      <Parameters>
+          <Parameter name="storageAccountName" hidden="true" defaultValue="{Outputs.storageAccountName}" />
+          <Parameter name="storageAccountKey" hidden="true" defaultValue="{Outputs.storageAccountKey}" />
+          <Parameter name="containerName" hidden="true" defaultValue="maintenancesadata" />
+          <Parameter name="assets" hidden="true">
+              <DefaultValue>
+                  {PatternAssetBaseUrl}\data\aircraftdemo_input_v4.csv                                                         
+              </DefaultValue>
+          </Parameter>                             
+      </Parameters>
+    </Function>
+    <Function name="populateSqlDatabase" title="Preparing SQL database">
+      <Parameters>
+        <Parameter hidden="true" name="sqlConnectionString" 
+defaultValue="Server=tcp:{Outputs.sqlServerName}.database.windows.net,1433;Database={Outputs.databaseName};User ID={Inputs.sqlServerUserName};Password={Inputs.sqlServerPassword};Trusted_Connection=False;Encrypt=True;Connection Timeout=30" />
+      </Parameters>
+    </Function>
+    <AzureMlWebService hiddenParameters ="true">
+      <GalleryUrl>https://gallery.cortanaintelligence.com/Details/bcae226bc74a4cbbb0ff700ac97448bf</GalleryUrl>
+    </AzureMlWebService>
+    <ArmDeployment source="arm/2-dataFactoryAndStreamAnalytics.json" title="Creating Data Factory and Stream Analytics" >
+      <Parameters>
+        <Parameter name="powerBiUserId" hidden="true">
+          <DefaultValue>{UserId}</DefaultValue>
+        </Parameter>
+        <Parameter name="powerBiUserDisplayName" hidden="true">
+          <DefaultValue>{UserDisplayName}</DefaultValue>
+        </Parameter>
+        <Parameter name="mlFunctionEndpoint" hidden="true">
+          <DefaultValue>{Outputs.webServiceApiUrl}</DefaultValue>
+        </Parameter>
+        <Parameter name="mlFunctionApiKey" hidden="true">
+          <DefaultValue>{Outputs.webServiceApiKey}</DefaultValue>
+        </Parameter>
+        <Parameter name="sqlServerName" hidden="true">
+          <DefaultValue>{Outputs.sqlServerName}</DefaultValue>
+        </Parameter>
+        <Parameter name="databaseName" hidden="true">
+          <DefaultValue>{Outputs.databaseName}</DefaultValue>
+        </Parameter>
+        <Parameter name="sqlServerUserName" hidden="true">
+          <DefaultValue>{Inputs.sqlServerUserName}</DefaultValue>
+        </Parameter>
+        <Parameter name="sqlServerPassword" hidden="true">
+          <DefaultValue>{Inputs.sqlServerPassword}</DefaultValue>
+        </Parameter>
+        <Parameter name="storageAccountName" hidden="true">
+          <DefaultValue>{Outputs.storageAccountName}</DefaultValue>
+        </Parameter>
+        <Parameter name="storageAccountKey" hidden="true">
+          <DefaultValue>{Outputs.storageAccountKey}</DefaultValue>
+        </Parameter>
+        <Parameter name="sharedAccessPolicyKey" hidden="true">
+          <DefaultValue>{Outputs.sharedAccessPolicyKey}</DefaultValue>
+        </Parameter>      
+      </Parameters>
+    </ArmDeployment>
+    <Function name="startStreamingJobs" title="Starting Stream Analytics jobs" retriable="true">
+      <Parameters>
+        <Parameter hidden="true" name="accessToken" type="string" defaultValue="{Authorization}" /> 
+        <Parameter hidden="true" name="resourceGroupName" type="string" defaultValue="{ResourceGroup.Name}" />
+        <Parameter hidden="true" name="subscriptionId" type="string" defaultValue="{SubscriptionId}" /> 
+        <Parameter hidden="true" name="saJobNames" type="string" defaultValue="{Outputs.saJobNames}" /> 
+      </Parameters>
+    </Function>
+    <Function name="startPipelines" title="Starting Data Factory pipelines">
+      <Parameters>
+        <Parameter hidden="true" name="accessToken" type="string" defaultValue="{Authorization}" /> 
+        <Parameter hidden="true" name="resourceGroupName" type="string" defaultValue="{ResourceGroup.Name}" />
+        <Parameter hidden="true" name="subscriptionId" type="string" defaultValue="{SubscriptionId}" /> 
+        <Parameter hidden="true" name="dataFactoryName" type="string" defaultValue="{Outputs.dataFactoryName}" /> 
+      </Parameters>
+    </Function>
+    <AzureFunctionApp title="Starting data genarator">
+      <AppSettings>
+        <Add key="StorageAccountName" value="{Outputs.storageAccountName}" />
+        <Add key="StorageAccountKey" value="{Outputs.storageAccountKey}" />
+        <Add key="DataStorageContainerName" value="{Inputs.containerNameVar}" />
+        <Add key="SourceDataFile" value="aircraftdemo_input_v4.csv" />
+        <Add key="EventHubName" value="{Outputs.ingestEventHubName}" />
+        <Add key="EventHubConnectionString" value="{Outputs.ehConnectionString}" />
+      </AppSettings>
+      <DeployWebJobs src="{PatternAssetBaseUrl}/WebJobs.zip" />
+    </AzureFunctionApp>
+    <Manual title="Done">
+      <Instructions src="markdown/instructions.md" format="markdown" />
+    </Manual>
+  </ProvisioningSteps>
+</Template>
